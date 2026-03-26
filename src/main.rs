@@ -1,47 +1,29 @@
 mod domain;
 
-use domain::cart::Cart;
-use axum::{Json, Router, routing::get};
-use serde_json::json;
-use std::time::Instant;
+
+use wasmtime::*;
 
 
+// #[tokio::main]
+use wasmtime::{Engine, Module, Store, Instance};
 
-async fn hello() -> Json<serde_json::Value> {
-    Json(json!({
-        "message": "HelloWorld"
-    }))
-}
+fn main() -> anyhow::Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
 
-#[tokio::main]
-async fn main() {
-    // ⏱️ start pomiaru
-    let start = Instant::now();
+    let module = Module::from_file(&engine, "build.wasm")?;
 
-    // domain code
+    // 👉 TO MUSI BYĆ
+    let instance = Instance::new(&mut store, &module, &[])?;
 
-    let mut cart = Cart::new();
+    // 👉 teraz dopiero działa
+    let evaluate = instance
+        .get_typed_func::<(f64, f64), i32>(&mut store, "evaluate")?;
 
-    cart.add("product-1".to_string(), 2);
-    cart.add("product-1".to_string(), 3);
-    cart.add("product-2".to_string(), 1);
+    let result = evaluate.call(&mut store, (35.0, 11.0))?;
 
-    println!("Cart after add: {:?}", cart);
+    println!("Result: {}", result != 0);
+    println!("Result2: {}", result);
 
-    cart.delete("product-1");
-
-    println!("Cart after delete: {:?}", cart);
-
-    //end of domain code
-
-    let app = Router::new().route("/", get(hello));
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-
-    // ⏱️ koniec "bootowania"
-    let duration = start.elapsed();
-    println!("🚀 Serwer wystartował w: {:?}", duration);
-    println!("🌍 http://127.0.0.1:3000");
-
-    axum::serve(listener, app).await.unwrap();
+    Ok(())
 }
