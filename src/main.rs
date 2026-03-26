@@ -1,11 +1,9 @@
 mod domain;
 
-
 use wasmtime::*;
 
-
 // #[tokio::main]
-use wasmtime::{Engine, Module, Store, Instance};
+use wasmtime::{Engine, Instance, Module, Store};
 
 fn main() -> anyhow::Result<()> {
     let engine = Engine::default();
@@ -13,17 +11,30 @@ fn main() -> anyhow::Result<()> {
 
     let module = Module::from_file(&engine, "build.wasm")?;
 
-    // 👉 TO MUSI BYĆ
-    let instance = Instance::new(&mut store, &module, &[])?;
+    let mut linker = Linker::new(&engine);
 
-    // 👉 teraz dopiero działa
-    let evaluate = instance
-        .get_typed_func::<(f64, f64), i32>(&mut store, "evaluate")?;
+    // 🔥 bridge functions
+    linker.func_wrap("env", "get_temp", || -> f64 { 35.0 })?;
 
-    let result = evaluate.call(&mut store, (35.0, 11.0))?;
+    linker.func_wrap("env", "get_pressure", || -> f64 { 5.0 })?;
+
+    linker.func_wrap("env", "log", || {
+        println!("pierdoleniec :DD");
+    })?;
+
+    // zamiast Instance::new
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    let evaluate = instance.get_typed_func::<(), i32>(&mut store, "evaluate")?;
+
+    let result = evaluate.call(&mut store, ())?;
 
     println!("Result: {}", result != 0);
-    println!("Result2: {}", result);
+
+    // run void
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    run.call(&mut store, ())?;
 
     Ok(())
 }
